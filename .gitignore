@@ -1,0 +1,92 @@
+# ====================
+# IDE
+# ====================
+.idea/
+*.iws
+*.iml
+*.ipr
+.vscode/
+.settings/
+.project
+.classpath
+
+# ====================
+# Build output
+# ====================
+target/
+bin/
+build/
+dist/
+
+# ====================
+# Logs and temporary files
+# ====================
+*.log
+logs/
+/tmp/
+/temp/
+!docs/**/*.md
+
+# ====================
+# OS generated files
+# ====================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# ====================
+# Maven
+# ====================
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+dependency-reduced-pom.xml
+buildNumber.properties
+
+# ====================
+# Test and runtime
+# ====================
+/test-output/
+/target/surefire-reports/
+/target/failsafe-reports/
+/debezium-connector-*/
+
+# ====================
+# Database files
+# ====================
+*.db
+*.dump
+*.backup
+
+# ====================
+# Local configuration
+# ====================
+.env
+*.env.local
+*.env.*.local
+
+# ====================
+# Coverage reports
+# ====================
+jacoco/
+coverage/
+*.exec
+
+# ====================
+# Checkstyle and other analysis
+# ====================
+checkstyle-result.xml
+findbugsXml.xml
+pmd.xml
+
+# ====================
+# IntelliJ IDEA
+# ====================
+out/
+*.orig
