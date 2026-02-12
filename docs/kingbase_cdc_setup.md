@@ -53,6 +53,24 @@ export KB_TABLES='form.t_debug,form.sys_user,public.order_info'
 export KB_SCHEMAS='form,public'
 ```
 
+推荐启动方式（多模块项目）：
+
+```bash
+mvn -q -pl kingbase-connector-core \
+  -Dexec.classpathScope=test \
+  -Dexec.mainClass=io.debezium.connector.kingbasees.KingbaseTest \
+  org.codehaus.mojo:exec-maven-plugin:3.5.0:java
+```
+
+兼容旧入口（默认包）也可用：
+
+```bash
+mvn -q -pl kingbase-connector-core \
+  -Dexec.classpathScope=test \
+  -Dexec.mainClass=KingbaseTest \
+  org.codehaus.mojo:exec-maven-plugin:3.5.0:java
+```
+
 ## 4. Publication 是否必须
 
 对当前分支默认的 `decoderbufs`：

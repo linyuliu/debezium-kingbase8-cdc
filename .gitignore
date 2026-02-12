@@ -70,6 +70,7 @@ buildNumber.properties
 .env
 *.env.local
 *.env.*.local
+.lite-console/
 
 # ====================
 # Coverage reports
@@ -90,3 +91,7 @@ pmd.xml
 # ====================
 out/
 *.orig
+
+# Frontend
+node_modules/
+kingbase-lite-ui/node_modules/

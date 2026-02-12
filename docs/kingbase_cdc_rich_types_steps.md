@@ -67,7 +67,16 @@ export KB_DEBUG_RAW_WAL=true
 
 ## 5. 结果验证
 
-1. 启动 `KingbaseTest`。
+1. 启动 `KingbaseTest`：
+
+```bash
+mvn -q -pl kingbase-connector-core \
+  -Dexec.classpathScope=test \
+  -Dexec.mainClass=io.debezium.connector.kingbasees.KingbaseTest \
+  org.codehaus.mojo:exec-maven-plugin:3.5.0:java
+```
+
+（兼容旧入口也可：`-Dexec.mainClass=KingbaseTest`）
 2. 观察控制台事件输出：
 - `INSERT`：100 条（若 `snapshot.mode=never`，只会看到启动后新写入）
 - `UPDATE`：10 条

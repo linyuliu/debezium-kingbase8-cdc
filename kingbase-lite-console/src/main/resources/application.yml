@@ -1,0 +1,19 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: kingbase-doris-lite-console
+  datasource:
+    url: jdbc:sqlite:${lite.console.data-dir}/lite-console.db
+    driver-class-name: org.sqlite.JDBC
+    hikari:
+      maximum-pool-size: 1
+      minimum-idle: 1
+      connection-test-query: SELECT 1
+
+lite:
+  console:
+    data-dir: .lite-console
+    java-command: java
+    max-log-lines: 500

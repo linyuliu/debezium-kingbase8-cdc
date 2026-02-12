@@ -1,233 +1,59 @@
-# Debezium Connector for Kingbase
+# Debezium Kingbase 多模块工程
 
-[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
-[![Debezium Version](https://img.shields.io/badge/debezium-1.5.4--Final-brightgreen.svg)](https://debezium.io/)
-[![Java 8+](https://img.shields.io/badge/java-8+-blue.svg)](https://adoptopenjdk.net/)
+这是一个多模块 Maven 工程，核心目标是“简单可运维”的 Kingbase -> Doris 同步：
 
-金仓数据库（Kingbase）的 Debezium CDC 连接器，基于日志的变更数据捕获技术实现数据实时同步。
+1. 平时走 CDC
+2. 出问题可手动恢复
+3. 可定时做“全量 + CDC”补偿
+4. 不依赖 Kafka / Kafka Connect / Flink
 
-## 📋 目录
+## 模块结构
 
-- [特性](#特性)
-- [架构](#架构)
-- [快速开始](#快速开始)
-- [配置说明](#配置说明)
-- [本地测试](#本地测试)
-- [Flink CDC 集成](#flink-cdc-集成)
-- [开发指南](#开发指南)
-- [贡献](#贡献)
-
-## ✨ 特性
-
-- **实时数据同步**：基于 WAL 日志实现实时变更捕获
-- **丰富数据类型支持**：支持 Kingbase 的各种数据类型
-- **高可用性**：支持复制槽管理和故障恢复
-- **灵活部署**：可嵌入应用或独立运行
-- **多种快照模式**：支持不同场景下的初始化策略
-
-## 🏗️ 架构
-
-本连接器基于 [Debezium 1.5.4.Final](https://debezium.io/) 构建，采用以下核心技术：
-
-- **Logical Decoding**：利用 Kingbase 的逻辑解码功能
-- **Protobuf 协议**：使用 decoderbufs 插件进行高效序列化
-- **复制槽机制**：确保数据变更的可靠传输
-- **Schema 管理**：自动处理表结构变更
-
-## 🚀 快速开始
-
-### 1. 环境准备
-
-确保 Kingbase 数据库已启用逻辑复制：
-
-```sql
--- 修改 kingbase.conf
-wal_level = logical
-max_replication_slots = 10
-max_wal_senders = 10
-
--- 重启数据库服务
+```text
+debezium-kingbase-parent (root)
+├── kingbase-connector-core   # Debezium Connector 内核 + Embedded 同步引擎
+├── kingbase-lite-console     # SpringBoot 控制台后端（API + 调度）
+└── kingbase-lite-ui          # Vue3 前端工程（由 Maven 在构建期自动打包）
 ```
 
-### 2. 创建复制槽
+## 关键入口
 
-```sql
-SELECT * FROM sys_create_logical_replication_slot('dbz_kingbase_slot', 'decoderbufs');
-```
+1. 引擎：`kingbase-connector-core/src/main/java/io/debezium/connector/kingbasees/sink/KingbaseToDorisSyncApp.java`
+2. 控制台：`kingbase-lite-console/src/main/java/io/debezium/connector/kingbasees/console/LiteConsoleApplication.java`
+3. 页面源码：`kingbase-lite-ui/src/App.vue`
+4. 页面产物：Maven 构建时自动写入 `kingbase-lite-console/src/main/resources/static/`
 
-### 3. Maven 依赖
+## 控制台能力
 
-```xml
-<dependency>
-    <groupId>io.debezium</groupId>
-    <artifactId>debezium-connector-kingbase</artifactId>
-    <version>1.5.4.Final</version>
-</dependency>
-```
+1. 数据源管理：增删改查、连通性测试、slot 检测
+2. 任务配置：源目标、过滤规则、路由与处理策略
+3. 触发模式：
+- `RESUME_CDC`
+- `FULL_THEN_CDC`
+- `FORCE_FULL_THEN_CDC`
+- `CDC_ONLY`
+4. 定时补偿：cron 调度
+5. 5 步向导：源目标 -> 功能配置 -> 表过滤 -> 数据处理 -> 创建确认
+6. 元数据选项：后端统一输出中文枚举选项（避免前端硬编码）
+7. 存储方式：嵌入式 SQLite（自动迁移旧 JSON 文件）
 
-### 4. 基本使用
-
-```java
-Properties props = new Properties();
-props.setProperty("name", "kingbase-connector");
-props.setProperty("connector.class", "io.debezium.connector.kingbasees.PostgresConnector");
-props.setProperty("database.hostname", "localhost");
-props.setProperty("database.port", "54321");
-props.setProperty("database.user", "kingbase");
-props.setProperty("database.password", "password");
-props.setProperty("database.dbname", "test");
-props.setProperty("table.include.list", "public.users");
-
-DebeziumEngine<ChangeEvent<String, String>> engine = DebeziumEngine.create(Json.class)
-    .using(props)
-    .notifying(record -> {
-        System.out.println("Received record: " + record);
-    })
-    .build();
-
-ExecutorService executor = Executors.newSingleThreadExecutor();
-executor.submit(engine);
-```
-
-## ⚙️ 配置说明
-
-### 核心配置项
-
-| 配置项 | 说明 | 默认值 |
-|--------|------|--------|
-| `database.hostname` | 数据库主机地址 | localhost |
-| `database.port` | 数据库端口 | 54321 |
-| `database.user` | 数据库用户名 | - |
-| `database.password` | 数据库密码 | - |
-| `database.dbname` | 数据库名 | - |
-| `plugin.name` | 逻辑解码插件 | decoderbufs |
-| `slot.name` | 复制槽名称 | debezium |
-| `table.include.list` | 包含的表列表 | - |
-| `snapshot.mode` | 快照模式 | initial |
-
-### 快照模式
-
-- `initial`：首次运行时进行快照
-- `never`：从不进行快照，只捕获增量变更
-- `always`：总是进行快照
-- `initial_only`：只进行初始快照
-- `exported`：使用导出快照
-- `custom`：自定义快照策略
-
-## 🧪 本地测试
-
-项目提供了完整的测试套件和演示程序：
-
-### 运行测试
+## 快速开始
 
 ```bash
-# 编译项目
-mvn clean package -DskipTests
-
-# 运行单元测试
-mvn test
+mvn -q -pl kingbase-lite-console -am -DskipTests package
+java -jar kingbase-lite-console/target/kingbase-lite-console-1.0.0.jar
 ```
 
-### 演示程序
+启动后访问：`http://127.0.0.1:8080/`
 
-参考 [`KingbaseTest.java`](src/test/java/KingbaseTest.java) 进行本地测试：
+## 构建命令
 
-```bash
-# 设置环境变量
-export KB_HOST=localhost
-export KB_PORT=54321
-export KB_USER=kingbase
-export KB_PASSWORD=password
-export KB_DB=test
-export KB_TABLES=public.users
+1. 全量打包（包含 UI + Java，跳过测试）：`mvn -q -pl kingbase-lite-console -am -DskipTests package`
+2. 全量测试：`mvn -q test`
+3. 跳过前端构建：`mvn -q -pl kingbase-lite-console -am -DskipTests -Dskip.frontend=true package`
 
-# 运行测试
-mvn exec:java -Dexec.mainClass="KingbaseTest"
-```
+## 文档
 
-## 🔌 Flink CDC 集成
-
-本连接器可与 Apache Flink CDC 完美集成：
-
-```java
-StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
-
-Properties debeziumProps = new Properties();
-debeziumProps.setProperty("connector.class", "io.debezium.connector.kingbasees.PostgresConnector");
-debeziumProps.setProperty("database.hostname", "localhost");
-debeziumProps.setProperty("database.port", "54321");
-debeziumProps.setProperty("database.user", "kingbase");
-debeziumProps.setProperty("database.password", "password");
-debeziumProps.setProperty("database.dbname", "test");
-debeziumProps.setProperty("table.include.list", "public.users");
-
-DataStreamSource<String> stream = env
-    .addSource(new FlinkCdcSourceFunction(debeziumProps))
-    .setParallelism(1);
-
-stream.print();
-env.execute("Kingbase CDC Job");
-```
-
-## 👨‍💻 开发指南
-
-### 项目结构
-
-```
-src/
-├── main/
-│   ├── java/io/debezium/connector/kingbasees/
-│   │   ├── connection/          # 数据库连接相关
-│   │   ├── data/               # 数据类型处理
-│   │   ├── snapshot/           # 快照功能
-│   │   └── spi/                # 服务提供接口
-│   ├── proto/                  # Protobuf 定义
-│   └── resources/              # 资源文件
-└── test/                       # 测试代码
-    └── java/
-        └── KingbaseTest.java   # 主要测试入口
-```
-
-### 构建项目
-
-```bash
-# 清理并编译
-mvn clean compile
-
-# 打包（跳过测试）
-mvn package -DskipTests
-
-# 安装到本地仓库
-mvn install -DskipTests
-```
-
-### 代码规范
-
-- 使用 Java 8 语法
-- 遵循 Debezium 代码风格
-- 添加必要的 Javadoc 注释
-- 编写单元测试
-
-## 🤝 贡献
-
-欢迎提交 Issue 和 Pull Request！
-
-### 开发流程
-
-1. Fork 项目
-2. 创建特性分支 (`git checkout -b feature/AmazingFeature`)
-3. 提交更改 (`git commit -m 'Add some AmazingFeature'`)
-4. 推送到分支 (`git push origin feature/AmazingFeature`)
-5. 开启 Pull Request
-
-## 📄 许可证
-
-本项目采用 Apache License 2.0 许可证 - 查看 [LICENSE](LICENSE) 文件了解详情。
-
-## 📚 相关文档
-
-- [Kingbase CDC 配置指南](docs/kingbase_cdc_setup.md)
-- [Kingbase -> Doris（Spring Boot 主工程方案）](docs/kingbase_to_doris_sync.md)
-- [SpringBoot 2.7 独立示例（可选）](examples/springboot27-kb-doris-demo/README.md)
-- [Rich Types 测试步骤](docs/kingbase_cdc_rich_types_steps.md)
-- [SQL 运维脚本](docs/sql/)
+1. 轻量控制台方案：`docs/kingbase_to_doris_lite_console.md`
+2. Kingbase CDC 配置：`docs/kingbase_cdc_setup.md`
+3. Rich Types 测试步骤：`docs/kingbase_cdc_rich_types_steps.md`
