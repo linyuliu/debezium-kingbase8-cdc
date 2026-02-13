@@ -86,6 +86,8 @@ public class PgProtoMessageDecoder extends AbstractMessageDecoder {
                         message.getNewTupleCount(),
                         message.getOldTupleCount(),
                         message.getNewTypeinfoCount());
+                // 输出列详情便于诊断版本兼容性问题
+                logColumnDetails(message);
             }
             if (!SUPPORTED_OPS.contains(message.getOp())) {
                 if (!warnedOnUnknownOp) {
@@ -120,8 +122,15 @@ public class PgProtoMessageDecoder extends AbstractMessageDecoder {
         return builder;
     }
 
+    /**
+     * 记录原始 WAL 包信息，便于逆向分析和版本兼容性诊断
+     * 环境变量 KB_DEBUG_RAW_WAL=true 或系统属性 kb.debug.rawwal=true 启用
+     */
     private void logRawMessage(byte[] content) {
-        LOGGER.info("[Proto解析] 原始 WAL 包：长度={} 字节，预览={}", content.length, toHexPreview(content, 96));
+        LOGGER.info("[Proto解析] 原始 WAL 包：长度={} 字节，预览（前96字节）={}", content.length, toHexPreview(content, 96));
+        if (content.length > 96) {
+            LOGGER.info("[Proto解析] 完整16进制转储：{}", toHexPreview(content, content.length));
+        }
     }
 
     private RowMessage parseRowMessage(byte[] content) throws InvalidProtocolBufferException {
@@ -410,6 +419,30 @@ public class PgProtoMessageDecoder extends AbstractMessageDecoder {
             return schema;
         }
         return schema + "." + table;
+    }
+
+    /**
+     * 输出列级别详情，便于逆向分析不同 Kingbase 版本的 Proto 格式差异
+     */
+    private void logColumnDetails(RowMessage message) {
+        if (message.getNewTupleCount() > 0) {
+            StringBuilder cols = new StringBuilder();
+            for (int i = 0; i < message.getNewTupleCount(); i++) {
+                PgProto.DatumMessage datum = message.getNewTuple(i);
+                if (i > 0) cols.append(", ");
+                cols.append(String.format("%s(type=%d)", datum.getColumnName(), datum.getColumnType()));
+            }
+            LOGGER.info("[Proto解析] 新行列详情：{}", cols.toString());
+        }
+        if (message.getOldTupleCount() > 0) {
+            StringBuilder cols = new StringBuilder();
+            for (int i = 0; i < message.getOldTupleCount(); i++) {
+                PgProto.DatumMessage datum = message.getOldTuple(i);
+                if (i > 0) cols.append(", ");
+                cols.append(String.format("%s(type=%d)", datum.getColumnName(), datum.getColumnType()));
+            }
+            LOGGER.info("[Proto解析] 旧行列详情：{}", cols.toString());
+        }
     }
 
     private static final class PayloadCandidate {
